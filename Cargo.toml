@@ -1,0 +1,20 @@
+[package]
+name = "polygon_al"
+version = "0.1.0"
+authors = ["kumquaternion <kumquaternion@users.noreply.github.com>"]
+
+[dependencies.cgmath]
+git = "https://github.com/bjz/cgmath-rs"
+version = "*"
+
+[dependencies.gfx]
+git = "https://github.com/gfx-rs/gfx-rs"
+version = "*"
+
+[dependencies.gfx_window_glfw]
+git = "https://github.com/gfx-rs/gfx_window_glfw"
+version = "*"
+
+[dependencies.glfw]
+git = "https://github.com/bjz/glfw-rs"
+version = "*"
