@@ -1,143 +1,54 @@
-extern crate cgmath;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_window_glfw;
 extern crate glfw;
 
-use cgmath::FixedArray;
-use cgmath::{Matrix, Point3, Vector3};
-use cgmath::{Transform, AffineMatrix3};
-use gfx::attrib::Floater;
-use gfx::traits::{Device, Factory, Stream, ToIndexSlice, ToSlice, FactoryExt};
+use glfw::{Action, Key, OpenGlProfileHint, WindowEvent, WindowHint, WindowMode};
+use gfx::traits::{Stream, ToIndexSlice, ToSlice, FactoryExt};
 
-// Declare the vertex format suitable for drawing.
-// Notice the use of FixedPoint.
 gfx_vertex!( Vertex {
-    a_Pos@ pos: [Floater<i8>; 3],
-    a_TexCoord@ tex_coord: [Floater<u8>; 2],
+    a_Pos@ pos: [f32; 2],
+    a_Color@ color: [f32; 3],
 });
 
-impl Vertex {
-    fn new(p: [i8; 3], t: [u8; 2]) -> Vertex {
-        Vertex {
-            pos: Floater::cast3(p),
-            tex_coord: Floater::cast2(t),
-        }
-    }
-}
-
-// The shader_param attribute makes sure the following struct can be used to
-// pass parameters to a shader.
-gfx_parameters!( Params {
-    u_Transform@ transform: [[f32; 4]; 4],
-    t_Color@ color: gfx::shade::TextureParam<R>,
-});
-
-
-//----------------------------------------
-
-pub fn main() {
+fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    glfw.window_hint(WindowHint::ContextVersion(3, 2));
+    glfw.window_hint(WindowHint::OpenGlForwardCompat(true));
+    glfw.window_hint(WindowHint::OpenGlProfile(OpenGlProfileHint::Core));
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     let (mut window, events) = glfw
-        .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
+        .create_window(640, 480, "polygon-al", WindowMode::Windowed)
         .unwrap();
     window.set_key_polling(true);
-
     let (mut stream, mut device, mut factory) = gfx_window_glfw::init(window);
 
-    let vertex_data = [
-        // top (0, 0, 1)
-        Vertex::new([-1, -1,  1], [0, 0]),
-        Vertex::new([ 1, -1,  1], [1, 0]),
-        Vertex::new([ 1,  1,  1], [1, 1]),
-        Vertex::new([-1,  1,  1], [0, 1]),
-        // bottom (0, 0, -1)
-        Vertex::new([-1,  1, -1], [1, 0]),
-        Vertex::new([ 1,  1, -1], [0, 0]),
-        Vertex::new([ 1, -1, -1], [0, 1]),
-        Vertex::new([-1, -1, -1], [1, 1]),
-        // right (1, 0, 0)
-        Vertex::new([ 1, -1, -1], [0, 0]),
-        Vertex::new([ 1,  1, -1], [1, 0]),
-        Vertex::new([ 1,  1,  1], [1, 1]),
-        Vertex::new([ 1, -1,  1], [0, 1]),
-        // left (-1, 0, 0)
-        Vertex::new([-1, -1,  1], [1, 0]),
-        Vertex::new([-1,  1,  1], [0, 0]),
-        Vertex::new([-1,  1, -1], [0, 1]),
-        Vertex::new([-1, -1, -1], [1, 1]),
-        // front (0, 1, 0)
-        Vertex::new([ 1,  1, -1], [1, 0]),
-        Vertex::new([-1,  1, -1], [0, 0]),
-        Vertex::new([-1,  1,  1], [0, 1]),
-        Vertex::new([ 1,  1,  1], [1, 1]),
-        // back (0, -1, 0)
-        Vertex::new([ 1, -1,  1], [0, 0]),
-        Vertex::new([-1, -1,  1], [1, 0]),
-        Vertex::new([-1, -1, -1], [1, 1]),
-        Vertex::new([ 1, -1, -1], [0, 1]),
+    let triangle_data = [
+        Vertex { pos: [-1.0, -1.0], color: [1.0, 1.0, 0.0] },
+        Vertex { pos: [ 1.0, -1.0], color: [1.0, 0.0, 1.0] },
+        Vertex { pos: [ 0.0,  1.0], color: [0.0, 1.0, 1.0] },
     ];
-
-    let mesh = factory.create_mesh(&vertex_data);
-
-    let index_data: &[u8] = &[
-         0,  1,  2,  2,  3,  0, // top
-         4,  5,  6,  6,  7,  4, // bottom
-         8,  9, 10, 10, 11,  8, // right
-        12, 13, 14, 14, 15, 12, // left
-        16, 17, 18, 18, 19, 16, // front
-        20, 21, 22, 22, 23, 20, // back
-    ];
-
-    let texture = factory.create_texture_rgba8(1, 1).unwrap();
-    factory.update_texture(
-        &texture, &texture.get_info().to_image_info(),
-        &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
-        None).unwrap();
-
-    let sampler = factory.create_sampler(
-        gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Bilinear,
-                                   gfx::tex::WrapMode::Clamp)
-    );
+    let mesh = factory.create_mesh(&triangle_data);
+    let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
     let program = {
         let vs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("cube_120.glslv")),
-            glsl_150: Some(include_bytes!("cube_150.glslv")),
+            glsl_150: Some(include_bytes!("basic.vert")),
             .. gfx::ShaderSource::empty()
         };
         let fs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("cube_120.glslf")),
-            glsl_150: Some(include_bytes!("cube_150.glslf")),
+            glsl_150: Some(include_bytes!("basic.frag")),
             .. gfx::ShaderSource::empty()
         };
         factory.link_program_source(vs, fs).unwrap()
     };
-
-    let view: AffineMatrix3<f32> = Transform::look_at(
-        &Point3::new(1.5f32, -5.0, 3.0),
-        &Point3::new(0f32, 0.0, 0.0),
-        &Vector3::unit_z(),
-    );
-    let proj = cgmath::perspective(cgmath::deg(45.0f32),
-                                   stream.get_aspect_ratio(), 1.0, 10.0);
-
-    let data = Params {
-        transform: proj.mul_m(&view.mat).into_fixed(),
-        color: (texture, Some(sampler)),
-        _r: std::marker::PhantomData,
-    };
-
-    let mut batch = gfx::batch::OwnedBatch::new(mesh, program, data).unwrap();
-    batch.slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
-    batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
+    let state = gfx::DrawState::new();
 
     while !stream.out.window.should_close() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
-                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
+                WindowEvent::Key(Key::Escape, _, Action::Press, _) =>
                     stream.out.window.set_should_close(true),
                 _ => {},
             }
@@ -148,7 +59,8 @@ pub fn main() {
             depth: 1.0,
             stencil: 0,
         });
-        stream.draw(&batch).unwrap();
+        stream.draw(&gfx::batch::bind(&state, &mesh, slice.clone(), &program, &None))
+              .unwrap();
         stream.present(&mut device);
     }
 }
